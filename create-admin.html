@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Admin User</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Creating Admin User...</h1>
+    <div id="result"></div>
+
+    <script>
+        const supabaseUrl = 'https://wtxuzwkxabhojtarjtmz.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0eHV6d2t4YWJob2p0YXJqdG16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5MjY1ODQsImV4cCI6MjA3OTUwMjU4NH0.xHEJxcdg7QgzsyLEnA9PRXCVPj2n56IYtykDpbHaQIU';
+
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+        async function createAdmin() {
+            const resultDiv = document.getElementById('result');
+
+            try {
+                // Sign up the admin user
+                const { data, error } = await supabase.auth.signUp({
+                    email: 'admin@admin.com',
+                    password: 'admin123456',
+                    options: {
+                        data: {
+                            full_name: 'System Administrator'
+                        }
+                    }
+                });
+
+                if (error) {
+                    resultDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                    console.error('Error:', error);
+                    return;
+                }
+
+                console.log('User created:', data);
+
+                // Now update the role to superadmin
+                if (data.user) {
+                    resultDiv.innerHTML = `
+                        <p style="color: green;">✓ Admin user created successfully!</p>
+                        <p>User ID: ${data.user.id}</p>
+                        <p>Email: ${data.user.email}</p>
+                        <p><strong>Now updating role to superadmin...</strong></p>
+                    `;
+
+                    // Wait a bit for trigger to execute
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+
+                    resultDiv.innerHTML += '<p style="color: green;">✓ Complete! You can now login with admin@admin.com / admin123456</p>';
+                }
+            } catch (err) {
+                resultDiv.innerHTML = `<p style="color: red;">Exception: ${err.message}</p>`;
+                console.error('Exception:', err);
+            }
+        }
+
+        createAdmin();
+    </script>
+</body>
+</html>

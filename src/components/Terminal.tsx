@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { Terminal as TerminalIcon, Send, X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 
 interface TerminalProps {
   serverId: string;
   onClose: () => void;
 }
+
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export function Terminal({ serverId, onClose }: TerminalProps) {
   const [command, setCommand] = useState('');
@@ -19,6 +20,10 @@ export function Terminal({ serverId, onClose }: TerminalProps) {
     }
   }, [output]);
 
+  const getAuthToken = () => {
+    return localStorage.getItem('auth_token') || '';
+  };
+
   const executeCommand = async () => {
     if (!command.trim() || isExecuting) return;
 
@@ -28,33 +33,37 @@ export function Terminal({ serverId, onClose }: TerminalProps) {
     setIsExecuting(true);
 
     try {
-      const { data: serverData } = await supabase
-        .from('servers')
-        .select('*')
-        .eq('id', serverId)
-        .maybeSingle();
+      const token = getAuthToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
 
-      if (!serverData) {
-        setOutput((prev) => [...prev, {
-          type: 'error',
-          text: '⚠️  Server not found. Please add a server first.\n\nTo use terminal:\n1. Add a server with SSH credentials\n2. Install agent on the server: python3 server-agent.py\n3. Agent will process commands automatically'
-        }]);
-        setIsExecuting(false);
-        return;
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const { data, error } = await supabase
-        .from('server_commands')
-        .insert({
-          server_id: serverId,
-          command_type: 'execute',
-          command: cmd,
-          status: 'pending',
-        })
-        .select()
-        .single();
+      const serverResponse = await fetch(`${API_URL}/servers/${serverId}`, {
+        headers,
+      });
 
-      if (error) throw error;
+      if (!serverResponse.ok) {
+        throw new Error('Server not found');
+      }
+
+      const commandResponse = await fetch(`${API_URL}/commands`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          server_id: serverId,
+          command: cmd,
+        }),
+      });
+
+      if (!commandResponse.ok) {
+        throw new Error('Failed to send command');
+      }
+
+      const commandData = await commandResponse.json();
 
       setOutput((prev) => [...prev, {
         type: 'output',
@@ -67,44 +76,52 @@ export function Terminal({ serverId, onClose }: TerminalProps) {
       const checkResult = setInterval(async () => {
         attempts++;
 
-        const { data: cmdData } = await supabase
-          .from('server_commands')
-          .select('*')
-          .eq('id', data.id)
-          .maybeSingle();
+        try {
+          const statusResponse = await fetch(`${API_URL}/commands/${commandData.id}`, {
+            headers,
+          });
 
-        if (cmdData && cmdData.status === 'completed') {
-          clearInterval(checkResult);
-          const outputText = cmdData.output || 'Command completed successfully';
-          setOutput((prev) => {
-            const withoutWaiting = prev.filter(item => !item.text.includes('Command sent to server'));
-            return [...withoutWaiting, { type: 'output', text: outputText }];
-          });
-          setIsExecuting(false);
-        } else if (cmdData && cmdData.status === 'failed') {
-          clearInterval(checkResult);
-          const errorText = cmdData.output || 'Command failed';
-          setOutput((prev) => {
-            const withoutWaiting = prev.filter(item => !item.text.includes('Command sent to server'));
-            return [...withoutWaiting, { type: 'error', text: errorText }];
-          });
-          setIsExecuting(false);
-        } else if (attempts >= maxAttempts) {
-          clearInterval(checkResult);
-          setOutput((prev) => {
-            const withoutWaiting = prev.filter(item => !item.text.includes('Command sent to server'));
-            return [...withoutWaiting, {
-              type: 'error',
-              text: '⏱️  Command timeout - no response from server agent\n\n' +
-                   '🔧 Troubleshooting:\n' +
-                   '1. Check if server agent is running: python3 server-agent.py\n' +
-                   '2. Verify SSH credentials are correct\n' +
-                   '3. Check server network connectivity\n' +
-                   '4. View agent logs for errors\n\n' +
-                   'The agent file is located at: /tmp/cc-agent/60574685/project/server-agent.py'
-            }];
-          });
-          setIsExecuting(false);
+          if (statusResponse.ok) {
+            const cmdData = await statusResponse.json();
+
+            if (cmdData.status === 'completed') {
+              clearInterval(checkResult);
+              const outputText = cmdData.output || 'Command completed successfully';
+              setOutput((prev) => {
+                const withoutWaiting = prev.filter(item => !item.text.includes('Command sent to server'));
+                return [...withoutWaiting, { type: 'output', text: outputText }];
+              });
+              setIsExecuting(false);
+            } else if (cmdData.status === 'failed') {
+              clearInterval(checkResult);
+              const errorText = cmdData.output || 'Command failed';
+              setOutput((prev) => {
+                const withoutWaiting = prev.filter(item => !item.text.includes('Command sent to server'));
+                return [...withoutWaiting, { type: 'error', text: errorText }];
+              });
+              setIsExecuting(false);
+            }
+          }
+
+          if (attempts >= maxAttempts) {
+            clearInterval(checkResult);
+            setOutput((prev) => {
+              const withoutWaiting = prev.filter(item => !item.text.includes('Command sent to server'));
+              return [...withoutWaiting, {
+                type: 'error',
+                text: '⏱️  Command timeout - no response from server agent\n\n' +
+                     '🔧 Troubleshooting:\n' +
+                     '1. Check if server agent is running: python3 server-agent.py\n' +
+                     '2. Verify agent token is correct\n' +
+                     '3. Check server network connectivity\n' +
+                     '4. View agent logs for errors\n\n' +
+                     'Install agent using the command from dashboard'
+              }];
+            });
+            setIsExecuting(false);
+          }
+        } catch (error) {
+          console.error('Error checking command status:', error);
         }
       }, 1000);
     } catch (error: any) {
@@ -113,8 +130,8 @@ export function Terminal({ serverId, onClose }: TerminalProps) {
         text: `❌ Error: ${error.message}\n\n` +
              '💡 Make sure:\n' +
              '• Server is added to the system\n' +
-             '• SSH credentials are configured\n' +
-             '• Agent is running on the remote server'
+             '• Agent is installed and running\n' +
+             '• Network connectivity is working'
       }]);
       setIsExecuting(false);
     }

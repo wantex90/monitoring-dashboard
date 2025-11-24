@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Power, RotateCw, Terminal as TerminalIcon, Trash2, AlertTriangle, ArrowLeft, Monitor, HardDrive, Cpu } from 'lucide-react';
+import { X, Power, RotateCw, Terminal as TerminalIcon, Trash2, AlertTriangle, ArrowLeft, Monitor, HardDrive, Cpu, Server as ServerIcon, Activity, Globe, Wifi, Clock, Calendar, MemoryStick, Layers } from 'lucide-react';
 import { supabase, Server, ServerMetrics, ServerService } from '../lib/supabase';
 import { MetricsChart } from './MetricsChart';
 import { ServicesPanel } from './ServicesPanel';
@@ -130,6 +130,31 @@ export function ServerDetail({ server, onClose, onServerDeleted }: ServerDetailP
     }
   };
 
+  const handleUpdateAgent = async () => {
+    if (!confirm('Update agent to latest version? This will:\n- Download latest agent\n- Restart monitoring service\n- Enable services monitoring\n\nThis takes about 1-2 minutes.')) return;
+
+    try {
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/update-agent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabase.supabaseKey}`,
+        },
+        body: JSON.stringify({ serverId: server.id }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(result.message + '\n\nRefresh the page after 2 minutes to see services.');
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
   const handleDelete = async () => {
     try {
       const { error } = await supabase.from('servers').delete().eq('id', server.id);
@@ -147,6 +172,20 @@ export function ServerDetail({ server, onClose, onServerDeleted }: ServerDetailP
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const formatUptime = (seconds: number) => {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+
+    if (days > 0) {
+      return `${days}d ${hours}h ${minutes}m`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else {
+      return `${minutes}m`;
+    }
   };
 
   const latestMetric = metrics[metrics.length - 1];
@@ -195,70 +234,211 @@ export function ServerDetail({ server, onClose, onServerDeleted }: ServerDetailP
 
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-h-[calc(100vh-120px)] overflow-y-auto">
               <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 rounded-lg p-4 sm:p-6 border border-gray-700/50">
-                <div className="flex items-center gap-3 mb-4">
-                  <Monitor className="w-5 h-5 text-cyan-400" />
-                  <h3 className="text-base sm:text-lg font-semibold text-white">System Information</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <Monitor className="w-5 h-5 text-cyan-400" />
+                    <h3 className="text-base sm:text-lg font-semibold text-white">System Information</h3>
+                  </div>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-lg transition-all text-xs font-medium border border-cyan-600/30"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                    Refresh
+                  </button>
                 </div>
-                {server.os_info ? (
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                    {server.os_info.os && (
-                      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
-                        <p className="text-gray-400 text-xs mb-1">Operating System</p>
-                        <p className="text-white font-semibold text-xs sm:text-sm break-words">{server.os_info.os}</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                  {/* OS Information */}
+                  {server.os_info?.system && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Monitor className="w-4 h-4 text-blue-400" />
+                        <p className="text-gray-400 text-xs">Operating System</p>
                       </div>
-                    )}
-                    {server.os_info.platform && (
-                      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
-                        <p className="text-gray-400 text-xs mb-1">Platform</p>
-                        <p className="text-white font-semibold text-xs sm:text-sm break-words">{server.os_info.platform}</p>
+                      <p className="text-white font-semibold text-xs sm:text-sm break-words">
+                        {server.os_info.system} {server.os_info.release || ''}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Kernel Version */}
+                  {server.kernel_version && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Layers className="w-4 h-4 text-purple-400" />
+                        <p className="text-gray-400 text-xs">Kernel Version</p>
                       </div>
-                    )}
-                    {server.os_info.version && (
-                      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
-                        <p className="text-gray-400 text-xs mb-1">Version</p>
-                        <p className="text-white font-semibold text-xs sm:text-sm break-words">{server.os_info.version}</p>
+                      <p className="text-white font-semibold text-xs sm:text-sm break-words">{server.kernel_version}</p>
+                    </div>
+                  )}
+
+                  {/* Architecture */}
+                  {server.architecture && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Cpu className="w-4 h-4 text-orange-400" />
+                        <p className="text-gray-400 text-xs">Architecture</p>
                       </div>
-                    )}
-                    {server.os_info.architecture && (
-                      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
-                        <p className="text-gray-400 text-xs mb-1">Architecture</p>
-                        <p className="text-white font-semibold text-xs sm:text-sm break-words">{server.os_info.architecture}</p>
-                      </div>
-                    )}
-                    {server.os_info.hostname && (
-                      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
-                        <p className="text-gray-400 text-xs mb-1">Hostname</p>
-                        <p className="text-white font-semibold text-xs sm:text-sm break-words">{server.os_info.hostname}</p>
-                      </div>
-                    )}
-                    {server.os_info.kernel && (
-                      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
-                        <p className="text-gray-400 text-xs mb-1">Kernel</p>
-                        <p className="text-white font-semibold text-xs sm:text-sm break-words">{server.os_info.kernel}</p>
-                      </div>
-                    )}
-                    {server.os_info.uptime && (
-                      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
-                        <p className="text-gray-400 text-xs mb-1">Uptime</p>
-                        <p className="text-white font-semibold text-xs sm:text-sm">{formatUptime(server.os_info.uptime)}</p>
-                      </div>
-                    )}
-                    {server.os_info.cpu_count && (
-                      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
-                        <p className="text-gray-400 text-xs mb-1">CPU Cores</p>
-                        <p className="text-white font-semibold text-xs sm:text-sm">{server.os_info.cpu_count}</p>
-                      </div>
-                    )}
+                      <p className="text-white font-semibold text-xs sm:text-sm">{server.architecture}</p>
+                    </div>
+                  )}
+
+                  {/* Hostname */}
+                  <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ServerIcon className="w-4 h-4 text-cyan-400" />
+                      <p className="text-gray-400 text-xs">Hostname</p>
+                    </div>
+                    <p className="text-white font-semibold text-xs sm:text-sm break-words">{server.hostname}</p>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <Monitor className="w-12 h-12 text-gray-600 mb-3" />
-                    <p className="text-gray-400 text-sm mb-2">No system information available</p>
-                    <p className="text-gray-500 text-xs">
-                      System info will appear once the monitoring agent sends data
-                    </p>
-                  </div>
-                )}
+
+                  {/* CPU Model */}
+                  {server.cpu_model && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all sm:col-span-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Cpu className="w-4 h-4 text-red-400" />
+                        <p className="text-gray-400 text-xs">CPU Model</p>
+                      </div>
+                      <p className="text-white font-semibold text-xs sm:text-sm break-words">{server.cpu_model}</p>
+                    </div>
+                  )}
+
+                  {/* CPU Cores */}
+                  {server.cpu_cores && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Activity className="w-4 h-4 text-yellow-400" />
+                        <p className="text-gray-400 text-xs">CPU Cores</p>
+                      </div>
+                      <p className="text-white font-semibold text-xs sm:text-sm">{server.cpu_cores} cores</p>
+                    </div>
+                  )}
+
+                  {/* Total RAM */}
+                  {server.total_ram && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <MemoryStick className="w-4 h-4 text-green-400" />
+                        <p className="text-gray-400 text-xs">Total RAM</p>
+                      </div>
+                      <p className="text-white font-semibold text-xs sm:text-sm">{formatBytes(server.total_ram)}</p>
+                      {latestMetric && (
+                        <div className="mt-2">
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-gray-500">Used</span>
+                            <span className="text-gray-400">{latestMetric.memory_percent.toFixed(1)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-700/50 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-300"
+                              style={{ width: `${latestMetric.memory_percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Total Disk */}
+                  {server.total_disk && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <HardDrive className="w-4 h-4 text-blue-400" />
+                        <p className="text-gray-400 text-xs">Total Disk</p>
+                      </div>
+                      <p className="text-white font-semibold text-xs sm:text-sm">{formatBytes(server.total_disk)}</p>
+                      {latestMetric && (
+                        <div className="mt-2">
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-gray-500">Used</span>
+                            <span className="text-gray-400">{latestMetric.disk_percent.toFixed(1)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-700/50 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                latestMetric.disk_percent > 90 ? 'bg-gradient-to-r from-red-500 to-red-400' :
+                                latestMetric.disk_percent > 75 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                                'bg-gradient-to-r from-blue-500 to-blue-400'
+                              }`}
+                              style={{ width: `${latestMetric.disk_percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Public IP */}
+                  {server.public_ip && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Globe className="w-4 h-4 text-emerald-400" />
+                        <p className="text-gray-400 text-xs">Public IP</p>
+                      </div>
+                      <p className="text-white font-semibold text-xs sm:text-sm font-mono">{server.public_ip}</p>
+                    </div>
+                  )}
+
+                  {/* Private IP */}
+                  {server.private_ip && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Wifi className="w-4 h-4 text-teal-400" />
+                        <p className="text-gray-400 text-xs">Private IP</p>
+                      </div>
+                      <p className="text-white font-semibold text-xs sm:text-sm font-mono">{server.private_ip}</p>
+                    </div>
+                  )}
+
+                  {/* Uptime */}
+                  {server.uptime_seconds && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="w-4 h-4 text-pink-400" />
+                        <p className="text-gray-400 text-xs">Uptime</p>
+                      </div>
+                      <p className="text-white font-semibold text-xs sm:text-sm">{formatUptime(server.uptime_seconds)}</p>
+                    </div>
+                  )}
+
+                  {/* Boot Time */}
+                  {server.boot_time && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Calendar className="w-4 h-4 text-violet-400" />
+                        <p className="text-gray-400 text-xs">Last Boot</p>
+                      </div>
+                      <p className="text-white font-semibold text-xs sm:text-sm">{new Date(server.boot_time).toLocaleString()}</p>
+                    </div>
+                  )}
+
+                  {/* Load Average */}
+                  {latestMetric?.load_average && (
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Activity className="w-4 h-4 text-amber-400" />
+                        <p className="text-gray-400 text-xs">Load Average</p>
+                      </div>
+                      <div className="flex gap-2 items-baseline">
+                        <div className="text-center">
+                          <p className="text-white font-semibold text-xs sm:text-sm">{latestMetric.load_average[0]?.toFixed(2) || '0.00'}</p>
+                          <p className="text-gray-500 text-xs">1m</p>
+                        </div>
+                        <span className="text-gray-600">|</span>
+                        <div className="text-center">
+                          <p className="text-white font-semibold text-xs sm:text-sm">{latestMetric.load_average[1]?.toFixed(2) || '0.00'}</p>
+                          <p className="text-gray-500 text-xs">5m</p>
+                        </div>
+                        <span className="text-gray-600">|</span>
+                        <div className="text-center">
+                          <p className="text-white font-semibold text-xs sm:text-sm">{latestMetric.load_average[2]?.toFixed(2) || '0.00'}</p>
+                          <p className="text-gray-500 text-xs">15m</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-2 sm:gap-3">
@@ -269,6 +449,14 @@ export function ServerDetail({ server, onClose, onServerDeleted }: ServerDetailP
                   <TerminalIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span className="hidden sm:inline">Open Terminal</span>
                   <span className="sm:hidden">Terminal</span>
+                </button>
+                <button
+                  onClick={handleUpdateAgent}
+                  className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-lg transition-all shadow-lg shadow-cyan-600/20 font-semibold text-sm"
+                >
+                  <RotateCw className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className="hidden lg:inline">Update Agent</span>
+                  <span className="lg:hidden">Update</span>
                 </button>
                 <button
                   onClick={handleRestart}

@@ -12,7 +12,11 @@ import { AuthModal } from './components/AuthModal';
 import { DashboardSkeleton, ServerCardSkeleton } from './components/LoadingSkeleton';
 import type { User } from '@supabase/supabase-js';
 
+console.log('=== APP.TSX LOADED ===');
+console.log('Supabase client:', supabase);
+
 function App() {
+  console.log('=== APP COMPONENT RENDERING ===');
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [servers, setServers] = useState<Server[]>([]);
@@ -289,7 +293,7 @@ function App() {
         ) : !user ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <img src="/gambar copy.png" alt="NMS Logo" className="w-24 h-24 mx-auto mb-4 object-contain" />
+              <img src="/sign.png" alt="NMS Logo" className="w-24 h-24 mx-auto mb-4 object-contain" />
               <h2 className="text-3xl font-bold text-white mb-2">NMS Node Watch</h2>
               <p className="text-gray-400 mb-6">Please sign in to access your server dashboard</p>
               <button

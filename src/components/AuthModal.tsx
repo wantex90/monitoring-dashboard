@@ -55,7 +55,7 @@ export function AuthModal({ onClose, onAuthenticated }: AuthModalProps) {
             <div className="flex flex-col items-center mb-8">
               <div className="relative mb-6">
                 <img
-                  src="/gambar copy.png"
+                  src="/sign.png"
                   alt="NMS Logo"
                   className="w-20 h-20 object-contain"
                 />
